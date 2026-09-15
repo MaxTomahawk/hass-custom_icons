@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, Callable
 
 PROFILE_FILENAME = "_iconset.json"
+PROFILE_MARKER_ATTRIBUTE = "data-custom-icons-duotone"
 
 DEFAULT_DUOTONE_PROFILE = {
     "profile": "duotone",
@@ -13,22 +14,6 @@ DEFAULT_DUOTONE_PROFILE = {
     "primary_opacity": "var(--primary-svg-opacity, 1)",
     "secondary_opacity": "1",
 }
-
-_PRIMARY_SELECTORS = (
-    '#primary',
-    '[id^="primary-"]',
-    '[data-name="primary"]',
-    '.primary',
-    '.fa-primary',
-)
-
-_SECONDARY_SELECTORS = (
-    '#secondary',
-    '[id^="secondary-"]',
-    '[data-name="secondary"]',
-    '.secondary',
-    '.fa-secondary',
-)
 
 
 class SvgProfileError(ValueError):
@@ -108,38 +93,105 @@ def find_svg_profile(icon_path: str, icon_root: str) -> tuple[dict[str, str] | N
     return None, None
 
 
-def _selector_list(selectors: tuple[str, ...]) -> str:
-    return ",\n".join(selectors)
+def _parse_inline_style(style: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for declaration in style.split(";"):
+        if ":" not in declaration:
+            continue
+        name, value = declaration.split(":", 1)
+        values[name.strip().lower()] = value.strip()
+    return values
 
 
-def _with_descendants(selectors: tuple[str, ...]) -> str:
-    return _selector_list((*selectors, *(f"{selector} *" for selector in selectors)))
+def _presentation_value(element, name: str) -> str:
+    style_value = _parse_inline_style(element.getAttribute("style")).get(name)
+    if style_value is not None:
+        return style_value.strip()
+    return element.getAttribute(name).strip()
+
+
+def should_apply_duotone_profile(
+    element, role: str, profile: dict[str, str] | None
+) -> bool:
+    """Return whether an element should inherit the directory duotone profile.
+
+    Explicit non-standard fill/opacity values are treated as intentional per-icon
+    exceptions and are left untouched. This lets a collection centralize its
+    generated defaults without flattening hand-tuned SVGs.
+    """
+
+    if not profile or profile.get("profile") != "duotone":
+        return False
+    if role not in ("primary", "secondary"):
+        return False
+
+    fill = _presentation_value(element, "fill")
+    expected_fill = profile[f"{role}_color"]
+    if fill and fill != expected_fill and fill.lower() != "currentcolor":
+        return False
+
+    opacity = _presentation_value(element, "opacity")
+    if opacity:
+        expected_opacity = profile[f"{role}_opacity"]
+        compatible_opacities = {
+            expected_opacity,
+            f"var(--{role}-svg-opacity)",
+            f"var(--{role}-svg-opacity, 1)",
+        }
+        if opacity not in compatible_opacities:
+            return False
+
+    return True
+
+
+def mark_duotone_profile_elements(
+    document,
+    role_resolver: Callable[[Any], str | None],
+    profile: dict[str, str] | None,
+) -> dict[str, int]:
+    """Mark only SVG elements that can safely inherit the duotone profile."""
+
+    counts = {"primary": 0, "secondary": 0, "preserved": 0}
+    for element in document.getElementsByTagName("*"):
+        role = role_resolver(element)
+        if role not in ("primary", "secondary"):
+            continue
+
+        if should_apply_duotone_profile(element, role, profile):
+            element.setAttribute(PROFILE_MARKER_ATTRIBUTE, role)
+            counts[role] += 1
+        else:
+            if element.hasAttribute(PROFILE_MARKER_ATTRIBUTE):
+                element.removeAttribute(PROFILE_MARKER_ATTRIBUTE)
+            counts["preserved"] += 1
+
+    return counts
 
 
 def build_svg_profile_css(profile: dict[str, str] | None) -> str:
-    """Build CSS injected into an SVG body for the selected profile."""
+    """Build CSS injected into an SVG body for marked profile elements."""
 
     if not profile:
         return ""
     if profile.get("profile") != "duotone":
         raise SvgProfileError(f"unsupported SVG profile: {profile.get('profile')}")
 
-    primary_fill = _with_descendants(_PRIMARY_SELECTORS)
-    secondary_fill = _with_descendants(_SECONDARY_SELECTORS)
-    primary_role = _selector_list(_PRIMARY_SELECTORS)
-    secondary_role = _selector_list(_SECONDARY_SELECTORS)
+    primary = f'[{PROFILE_MARKER_ATTRIBUTE}="primary"]'
+    secondary = f'[{PROFILE_MARKER_ATTRIBUTE}="secondary"]'
 
     return f"""
-{primary_fill} {{
+{primary},
+{primary} * {{
   fill: var(--custom-icons-duotone-primary-color, {profile['primary_color']}) !important;
 }}
-{primary_role} {{
+{primary} {{
   opacity: var(--custom-icons-duotone-primary-opacity, {profile['primary_opacity']}) !important;
 }}
-{secondary_fill} {{
+{secondary},
+{secondary} * {{
   fill: var(--custom-icons-duotone-secondary-color, {profile['secondary_color']}) !important;
 }}
-{secondary_role} {{
+{secondary} {{
   opacity: var(--custom-icons-duotone-secondary-opacity, {profile['secondary_opacity']}) !important;
 }}
 """.strip()
