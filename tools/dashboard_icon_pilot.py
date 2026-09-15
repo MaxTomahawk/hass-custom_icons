@@ -41,31 +41,10 @@ DUOTONE_PROFILE = {
     'secondary_opacity': '1',
 }
 
-GLOW_STYLE = r'''
-.pilot-glow-base, .pilot-glow-base * {
-  fill: url(#pilot-glow-gradient) !important;
+GRADIENT_STYLE = r'''
+.pilot-gradient-base, .pilot-gradient-base * {
+  fill: url(#pilot-gradient) !important;
   stroke: none !important;
-}
-.pilot-glow-base {
-  filter: url(#pilot-soft-glow);
-}
-.pilot-glow-depth, .pilot-glow-depth * {
-  fill: oklch(from currentcolor 0.49 min(c,0.12) h / .58) !important;
-  stroke: none !important;
-}
-.pilot-glow-depth {
-  opacity: .55;
-}
-.pilot-glow-rim, .pilot-glow-rim * {
-  fill: none !important;
-  stroke: oklch(from currentcolor 0.96 min(c,0.035) h / .78) !important;
-  stroke-width: .38;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-.pilot-glow-rim {
-  opacity: .78;
 }
 '''.strip()
 
@@ -186,17 +165,17 @@ def build_duotone(source: ET.Element, source_ref: str) -> ET.Element:
     return out
 
 
-def build_glow(source: ET.Element, source_ref: str) -> ET.Element:
+def build_gradient(source: ET.Element, source_ref: str) -> ET.Element:
     vb = parse_viewbox(source)
     x, y, w, h = vb
     out = ET.Element(Q('svg'), {
         'viewBox': f'{x:g} {y:g} {w:g} {h:g}',
         'data-pilot-source': source_ref,
-        'data-pilot-style': 'glow',
+        'data-pilot-style': 'gradient',
     })
     defs = ET.SubElement(out, Q('defs'))
     gradient = ET.SubElement(defs, Q('linearGradient'), {
-        'id': 'pilot-glow-gradient', 'x1': '0%', 'y1': '0%', 'x2': '100%', 'y2': '100%'
+        'id': 'pilot-gradient', 'x1': '0%', 'y1': '0%', 'x2': '100%', 'y2': '100%'
     })
     ET.SubElement(gradient, Q('stop'), {
         'offset': '0%', 'style': 'stop-color:oklch(from currentcolor 0.96 min(c,0.045) h / 1)'
@@ -207,30 +186,13 @@ def build_glow(source: ET.Element, source_ref: str) -> ET.Element:
     ET.SubElement(gradient, Q('stop'), {
         'offset': '100%', 'style': 'stop-color:oklch(from currentcolor 0.61 min(c,0.17) h / 1)'
     })
-    filt = ET.SubElement(defs, Q('filter'), {
-        'id': 'pilot-soft-glow', 'x': '-45%', 'y': '-45%', 'width': '190%', 'height': '190%',
-        'color-interpolation-filters': 'sRGB',
-    })
-    ET.SubElement(filt, Q('feGaussianBlur'), {'in': 'SourceGraphic', 'stdDeviation': '0.85', 'result': 'blur'})
-    ET.SubElement(filt, Q('feFlood'), {'flood-color': 'currentColor', 'flood-opacity': '.62', 'result': 'glowColor'})
-    ET.SubElement(filt, Q('feComposite'), {'in': 'glowColor', 'in2': 'blur', 'operator': 'in', 'result': 'softGlow'})
-    merge = ET.SubElement(filt, Q('feMerge'))
-    ET.SubElement(merge, Q('feMergeNode'), {'in': 'softGlow'})
-    ET.SubElement(merge, Q('feMergeNode'), {'in': 'SourceGraphic'})
     style = ET.SubElement(defs, Q('style'))
-    style.text = GLOW_STYLE
+    style.text = GRADIENT_STYLE
 
-    children = geometry_children(source)
-    depth = ET.SubElement(out, Q('g'), {'class': 'pilot-glow-depth', 'transform': 'translate(.45 .55)'})
-    base = ET.SubElement(out, Q('g'), {'class': 'pilot-glow-base'})
-    rim = ET.SubElement(out, Q('g'), {'class': 'pilot-glow-rim', 'transform': 'translate(-.18 -.22)'})
-    for child in children:
-        clean = sanitize_tree(child, preserve_roles=False)
-        depth.append(copy.deepcopy(clean))
-        base.append(copy.deepcopy(clean))
-        rim.append(copy.deepcopy(clean))
+    base = ET.SubElement(out, Q('g'), {'class': 'pilot-gradient-base'})
+    for child in geometry_children(source):
+        base.append(sanitize_tree(child, preserve_roles=False))
     return out
-
 
 def write_svg(root: ET.Element, path: Path) -> None:
     ET.indent(root, space='  ')
@@ -241,9 +203,9 @@ def build(custom_icons_root: Path, hue_js: Path, output: Path) -> dict:
     if output.exists():
         shutil.rmtree(output)
     duo_dir = output / 'pilot-duotone'
-    glow_dir = output / 'pilot-glow'
+    gradient_dir = output / 'pilot-gradient'
     duo_dir.mkdir(parents=True)
-    glow_dir.mkdir(parents=True)
+    gradient_dir.mkdir(parents=True)
     (duo_dir / '_iconset.json').write_text(json.dumps(DUOTONE_PROFILE, indent=2) + '\n', encoding='utf-8')
     hue_text = hue_js.read_text(encoding='utf-8')
     manifest = []
@@ -255,11 +217,11 @@ def build(custom_icons_root: Path, hue_js: Path, output: Path) -> dict:
         else:
             source = source_from_local(custom_icons_root, item['source'])
         write_svg(build_duotone(source, item['original']), duo_dir / f"{item['name']}.svg")
-        write_svg(build_glow(source, item['original']), glow_dir / f"{item['name']}.svg")
+        write_svg(build_gradient(source, item['original']), gradient_dir / f"{item['name']}.svg")
         manifest.append({
             **item,
             'duotone': f"local:pilot-duotone/{item['name']}",
-            'glow': f"local:pilot-glow/{item['name']}",
+            'gradient': f"local:pilot-gradient/{item['name']}",
         })
     (output / 'pilot_manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     return {'icons': len(manifest), 'files': len(list(output.rglob('*.svg'))), 'manifest': manifest}
@@ -268,8 +230,8 @@ def build(custom_icons_root: Path, hue_js: Path, output: Path) -> dict:
 def validate(output: Path) -> dict:
     errors = []
     duos = list((output / 'pilot-duotone').glob('*.svg'))
-    glows = list((output / 'pilot-glow').glob('*.svg'))
-    for path in duos + glows:
+    gradients = list((output / 'pilot-gradient').glob('*.svg'))
+    for path in duos + gradients:
         try:
             root = ET.fromstring(path.read_text(encoding='utf-8'))
         except Exception as exc:
@@ -282,12 +244,15 @@ def validate(output: Path) -> dict:
             if not any(role_of(el) in {'primary', 'secondary'} for el in root.iter()):
                 errors.append(f'{path.name}: no duotone roles')
         else:
-            for required in ('pilot-glow-gradient', 'pilot-soft-glow', 'pilot-glow-base', 'pilot-glow-rim'):
+            for required in ('pilot-gradient', 'pilot-gradient-base'):
                 if required not in text:
                     errors.append(f'{path.name}: missing {required}')
-    if len(duos) != 10 or len(glows) != 10:
-        errors.append(f'expected 10+10 SVGs, got {len(duos)}+{len(glows)}')
-    return {'ok': not errors, 'errors': errors, 'duotone': len(duos), 'glow': len(glows)}
+            for forbidden in ('<filter', 'fegaussianblur', 'feflood', 'fecomposite', 'femerge', 'pilot-glow', 'pilot-soft-glow'):
+                if forbidden in text:
+                    errors.append(f'{path.name}: unexpected glow effect {forbidden}')
+    if len(duos) != 10 or len(gradients) != 10:
+        errors.append(f'expected 10+10 SVGs, got {len(duos)}+{len(gradients)}')
+    return {'ok': not errors, 'errors': errors, 'duotone': len(duos), 'gradient': len(gradients)}
 
 
 def main() -> None:
