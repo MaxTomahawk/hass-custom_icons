@@ -27,6 +27,15 @@ class SvgProfileTests(unittest.TestCase):
         self.assertIn('[data-name="primary"]', css)
         self.assertIn(".fa-secondary", css)
 
+    def test_opacity_is_applied_to_role_not_descendants(self):
+        profile = svg_profiles.normalize_svg_profile({"profile": "duotone"})
+        css = svg_profiles.build_svg_profile_css(profile)
+
+        primary_opacity_rule = css.split("--custom-icons-duotone-primary-opacity", 1)[0]
+        primary_opacity_selectors = primary_opacity_rule.rsplit("}", 1)[-1]
+        self.assertIn("#primary", primary_opacity_selectors)
+        self.assertNotIn("#primary *", primary_opacity_selectors)
+
     def test_duotone_profile_supports_safe_overrides(self):
         profile = svg_profiles.normalize_svg_profile(
             {
@@ -45,10 +54,11 @@ class SvgProfileTests(unittest.TestCase):
         self.assertIn("0.6", css)
 
     def test_unsafe_css_override_is_rejected(self):
-        with self.assertRaises(svg_profiles.SvgProfileError):
-            svg_profiles.normalize_svg_profile(
-                {"profile": "duotone", "primary_color": "red;</style>"}
-            )
+        for value in ("red;</style>", "url(https://example.test/icon.svg)"):
+            with self.subTest(value=value), self.assertRaises(svg_profiles.SvgProfileError):
+                svg_profiles.normalize_svg_profile(
+                    {"profile": "duotone", "primary_color": value}
+                )
 
     def test_nearest_profile_is_inherited(self):
         with tempfile.TemporaryDirectory() as temp_dir:

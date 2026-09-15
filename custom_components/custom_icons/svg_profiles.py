@@ -40,8 +40,11 @@ def _css_value(name: str, value: Any) -> str:
         raise SvgProfileError(f"{name} must be a non-empty string")
 
     value = value.strip()
+    lowered = value.lower()
     if any(token in value for token in ("<", ">", "{", "}", ";", "\n", "\r")):
         raise SvgProfileError(f"{name} contains unsafe CSS characters")
+    if any(token in lowered for token in ("url(", "expression(", "@import")):
+        raise SvgProfileError(f"{name} contains an unsupported CSS function")
     return value
 
 
@@ -105,8 +108,12 @@ def find_svg_profile(icon_path: str, icon_root: str) -> tuple[dict[str, str] | N
     return None, None
 
 
+def _selector_list(selectors: tuple[str, ...]) -> str:
+    return ",\n".join(selectors)
+
+
 def _with_descendants(selectors: tuple[str, ...]) -> str:
-    return ",\n".join((*selectors, *(f"{selector} *" for selector in selectors)))
+    return _selector_list((*selectors, *(f"{selector} *" for selector in selectors)))
 
 
 def build_svg_profile_css(profile: dict[str, str] | None) -> str:
@@ -117,16 +124,22 @@ def build_svg_profile_css(profile: dict[str, str] | None) -> str:
     if profile.get("profile") != "duotone":
         raise SvgProfileError(f"unsupported SVG profile: {profile.get('profile')}")
 
-    primary = _with_descendants(_PRIMARY_SELECTORS)
-    secondary = _with_descendants(_SECONDARY_SELECTORS)
+    primary_fill = _with_descendants(_PRIMARY_SELECTORS)
+    secondary_fill = _with_descendants(_SECONDARY_SELECTORS)
+    primary_role = _selector_list(_PRIMARY_SELECTORS)
+    secondary_role = _selector_list(_SECONDARY_SELECTORS)
 
     return f"""
-{primary} {{
+{primary_fill} {{
   fill: var(--custom-icons-duotone-primary-color, {profile['primary_color']}) !important;
+}}
+{primary_role} {{
   opacity: var(--custom-icons-duotone-primary-opacity, {profile['primary_opacity']}) !important;
 }}
-{secondary} {{
+{secondary_fill} {{
   fill: var(--custom-icons-duotone-secondary-color, {profile['secondary_color']}) !important;
+}}
+{secondary_role} {{
   opacity: var(--custom-icons-duotone-secondary-opacity, {profile['secondary_opacity']}) !important;
 }}
 """.strip()
