@@ -62,8 +62,26 @@ class DashboardIconPilotTests(unittest.TestCase):
         self.assertTrue(icon_proof["ok"], icon_proof["errors"])
         self.assertTrue(dashboard_proof["ok"], dashboard_proof["errors"])
         self.assertEqual("local:pilot-duotone/mdi-water", manifest[0]["duotone"])
-        self.assertEqual("local:pilot-glow/mdi-water", manifest[0]["glow"])
+        self.assertEqual("local:pilot-gradient/mdi-water", manifest[0]["gradient"])
         self.assertTrue(dashboard_item["require_admin"])
+        self.assertEqual("OneUI 8.5 Frosted Green", dashboard["data"]["config"]["views"][0]["theme"])
+
+        dashboard_with_preview = pilot_dashboard.build_dashboard(manifest, "light.example")
+        preview_cards = dashboard_with_preview["data"]["config"]["views"][0]["cards"]
+        native_tiles = []
+        for card in preview_cards:
+            if card.get("type") == "horizontal-stack":
+                native_tiles.extend(c for c in card.get("cards", []) if c.get("type") == "tile")
+        self.assertEqual(2, len(native_tiles))
+        self.assertEqual("light.example", native_tiles[0]["entity"])
+        self.assertEqual("local:pilot-gradient/hue-ceiling-round", native_tiles[1]["icon"])
+
+        for svg in (self.output / "pilot-gradient").glob("*.svg"):
+            text = svg.read_text(encoding="utf-8").lower()
+            self.assertIn("pilot-gradient", text)
+            self.assertNotIn("<filter", text)
+            self.assertNotIn("fegaussianblur", text)
+            self.assertNotIn("pilot-glow", text)
 
     def test_generated_svg_has_no_external_or_script_content(self):
         pilot.build(self.custom_icons, self.hue_js, self.output)

@@ -39,17 +39,47 @@ def pilot_button(name: str, icon: str, subtitle: str) -> dict:
     }
 
 
-def build_dashboard(manifest: list[dict]) -> dict:
+def build_dashboard(manifest: list[dict], preview_entity: str | None = None) -> dict:
     cards: list[dict] = [
         {
             "type": "markdown",
             "content": (
                 "# Icon Pilot\n"
                 "Tien iconen uit het echte Overview-dashboard, telkens **origineel / "
-                "duotone / glow**. De pilot verandert het bestaande dashboard niet."
+                "duotone / gradient**. De pilot verandert het bestaande dashboard niet."
             ),
         }
     ]
+
+    if preview_entity:
+        hue_item = next(item for item in manifest if item["name"] == "hue-ceiling-round")
+        cards.extend([
+            {
+                "type": "markdown",
+                "content": "## Native Tile / Frosted theme\nZelfde entity met origineel en Gradient-icoon.",
+            },
+            {
+                "type": "horizontal-stack",
+                "cards": [
+                    {
+                        "type": "tile",
+                        "entity": preview_entity,
+                        "name": "Native origineel",
+                        "icon": hue_item["original"],
+                        "tap_action": {"action": "none"},
+                        "hold_action": {"action": "none"},
+                    },
+                    {
+                        "type": "tile",
+                        "entity": preview_entity,
+                        "name": "Native Gradient",
+                        "icon": hue_item["gradient"],
+                        "tap_action": {"action": "none"},
+                        "hold_action": {"action": "none"},
+                    },
+                ],
+            },
+        ])
 
     for item in manifest:
         cards.append(
@@ -62,7 +92,7 @@ def build_dashboard(manifest: list[dict]) -> dict:
                         "cards": [
                             pilot_button("Origineel", item["original"], item["kind"].upper()),
                             pilot_button("Duotone", item["duotone"], "PILOT"),
-                            pilot_button("Glow", item["glow"], "PILOT"),
+                            pilot_button("Gradient", item["gradient"], "PILOT"),
                         ],
                     },
                 ],
@@ -79,8 +109,9 @@ def build_dashboard(manifest: list[dict]) -> dict:
                     {
                         "title": "Icon Pilot",
                         "path": "pilot",
-                        "icon": "local:pilot-glow/mdi-home-roof",
+                        "icon": "local:pilot-gradient/mdi-home-roof",
                         "type": "masonry",
+                        "theme": "OneUI 8.5 Frosted Green",
                         "cards": cards,
                     }
                 ]
@@ -93,7 +124,7 @@ def build_dashboard_item() -> dict:
     return {
         "id": "dashboard_icon_pilot",
         "show_in_sidebar": True,
-        "icon": "local:pilot-glow/mdi-home-roof",
+        "icon": "local:pilot-gradient/mdi-home-roof",
         "title": "Icon Pilot",
         "require_admin": True,
         "mode": "storage",
@@ -132,6 +163,7 @@ def validate(dashboard: dict, dashboard_item: dict) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pilot-output", type=Path, required=True)
+    parser.add_argument("--preview-entity")
     args = parser.parse_args()
 
     manifest_path = args.pilot_output / "pilot_manifest.json"
@@ -139,7 +171,7 @@ def main() -> None:
     if len(manifest) != 10:
         raise SystemExit(f"expected 10 pilot icons, got {len(manifest)}")
 
-    dashboard = build_dashboard(manifest)
+    dashboard = build_dashboard(manifest, args.preview_entity)
     dashboard_item = build_dashboard_item()
     proof = validate(dashboard, dashboard_item)
 
