@@ -1,13 +1,13 @@
 {
   "domain": "custom_icons",
   "name": "Custom Icons",
-  "codeowners": ["@thomasloven"],
+  "codeowners": ["@MaxTomahawk"],
   "config_flow": true,
   "dependencies": ["frontend", "http"],
-  "documentation": "https://github.com/thomasloven/hass-custom_icons",
+  "documentation": "https://github.com/MaxTomahawk/hass-custom_icons",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/thomasloven/hass-custom_icons/issues",
+  "issue_tracker": "https://github.com/MaxTomahawk/hass-custom_icons/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "1.0.1"
+  "version": "1.1.0"
 }

@@ -12,6 +12,7 @@ from .iconset_base import (
     process_svg,
 )
 from .const import DOMAIN, ICON_PATH
+from .svg_profiles import SvgProfileError, find_svg_profile
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,8 +31,21 @@ def list_icons(root):
     return icon_list
 
 
+def resolve_icon_path(root: str, icon: str) -> str:
+    root = os.path.realpath(root)
+    path = os.path.realpath(os.path.join(root, icon + ".svg"))
+
+    try:
+        if os.path.commonpath((root, path)) != root:
+            raise ValueError(f"Icon path escapes local icon root: {icon}")
+    except ValueError as err:
+        raise ValueError(f"Invalid local icon path: {icon}") from err
+
+    return path
+
+
 def read_icon(path: str) -> str:
-    with open(path) as fp:
+    with open(path, encoding="utf-8") as fp:
         return fp.read()
 
 
@@ -39,9 +53,11 @@ class LocalSet(IconSetCollection):
 
     def __init__(self):
         self.cache = []
+        self.profile_cache = {}
 
     def flush(self) -> None:
         self.cache = []
+        self.profile_cache = {}
 
     async def sets(self, hass: HomeAssistant) -> dict[str, IconSetInfo]:
         prefix = "local"
@@ -84,9 +100,23 @@ class LocalSet(IconSetCollection):
         self, hass: HomeAssistant, prefix: str, icon: str
     ) -> IconData | None:
 
-        icon_path = hass.config.path(ICON_PATH + "/" + icon + ".svg")
+        icon_root = hass.config.path(ICON_PATH)
+        icon_path = resolve_icon_path(icon_root, icon)
 
         loop = asyncio.get_running_loop()
-        icon = await loop.run_in_executor(None, read_icon, icon_path)
+        svg = await loop.run_in_executor(None, read_icon, icon_path)
 
-        return process_svg(icon)
+        icon_dir = os.path.dirname(icon_path)
+        if icon_dir not in self.profile_cache:
+            try:
+                profile, profile_path = await loop.run_in_executor(
+                    None, find_svg_profile, icon_path, icon_root
+                )
+                self.profile_cache[icon_dir] = profile
+                if profile_path:
+                    LOGGER.debug("Using SVG profile %s for %s", profile_path, icon_dir)
+            except (OSError, ValueError, SvgProfileError) as err:
+                LOGGER.warning("Ignoring invalid SVG profile for %s: %s", icon, err)
+                self.profile_cache[icon_dir] = None
+
+        return process_svg(svg, profile=self.profile_cache[icon_dir])
