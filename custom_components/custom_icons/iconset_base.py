@@ -2,7 +2,7 @@ from typing import TypedDict
 from xml.dom import minidom
 from homeassistant.core import HomeAssistant
 
-from .svg_profiles import build_svg_profile_css
+from .svg_profiles import build_svg_profile_css, mark_duotone_profile_elements
 
 
 class IconData(TypedDict):
@@ -86,6 +86,9 @@ def process_svg(svg, profile: dict[str, str] | None = None) -> IconData:
             path2 = d
 
     path = path or sumpath
+
+    if profile:
+        mark_duotone_profile_elements(s, _element_role, profile)
 
     body = "".join(
         (n.toprettyxml() for n in s.getElementsByTagName("svg")[0].childNodes)

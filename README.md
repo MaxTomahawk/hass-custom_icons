@@ -56,7 +56,7 @@ primary:   oklch(from currentcolor 0.7485 min(c,0.1258) h / 1)
 secondary: oklch(from currentcolor 0.8794 min(c,0.0505) h / 1)
 ```
 
-Existing inline `fill` values are overridden only for elements that carry a recognized duotone role. Other local/full-color icons keep their normal behavior.
+Role elements with the generated default fill/opacity (or no explicit presentation value) inherit the directory profile. Explicit non-standard fill or opacity values are treated as per-icon exceptions and remain untouched, so hand-tuned icons are not flattened by the profile.
 
 The profile can be customized without editing the SVG files:
 
